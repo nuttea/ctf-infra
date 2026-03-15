@@ -1,21 +1,22 @@
 ## What's this
-This repository contains guides and configuration files of CTFd server, which is able to host on Google Cloud Run.
-And also including terraform code for swagstore GKE cluster, CTFd Cloud Run and datastores, and Datadog settings.
+This repository contains infrastructure-as-code and configuration files for hosting a [CTFd](https://ctfd.io/) server on Google Cloud Run, including Terraform modules for all required datastores.
 
 ## CTFd server architecture
-### CTFd on AWS(v1.0)
+
+### CTFd on AWS (v1.0)
 
 #### Single EC2 architecture
 <img width=25%><img src="https://github.com/user-attachments/assets/6ef5a435-fac9-43a4-86a3-a060664b1efe" width=50%>
 
-### Datadog employees
-If you are in Datadog Sandbox AWS account, it has the limitation: AWS Config automatically delete extensive security group rules.
+> **Datadog Sandbox (AWS):** AWS Config automatically deletes extensive security group rules. Adjust rules accordingly.
 
-### CTFd on Google Cloud(v2.0)
-Use Cloud Run as a CTFd container server, Cloud SQL as a database and Cloud Storage FUSE as an image upload folder.
+---
 
-If there are many CTFd users, which are more than 10, Cloud Run are recommended to be scaled out. 
-CTFd server has the login cache locally in a container w/o a Redis server. Redis server is necessary to avoid 403 error due to this.
+### CTFd on Google Cloud (v2.0)
+
+Uses Cloud Run as the CTFd container host, Cloud SQL (MySQL) as the database, Cloud Memorystore (Redis) for session caching, and GCS FUSE for persistent image uploads.
+
+> **Why Redis?** CTFd caches login sessions locally per container. Without Redis, scaling Cloud Run beyond a single instance causes 403 errors. Redis provides a shared session store across all instances.
 
 #### Single container architecture
 <img width=10%><img src="https://github.com/user-attachments/assets/f6ec4e1b-d65a-43dc-ab51-6437845d899b" width=80%>
@@ -23,44 +24,97 @@ CTFd server has the login cache locally in a container w/o a Redis server. Redis
 #### Multiple container architecture
 <img width=10%><img src="https://github.com/user-attachments/assets/6fafed9e-8aa7-4dcf-bd70-ef4ef77cd9f9" width=80%>
 
-### How to deploy CTFd server on Cloud Run
-#### Open and authorize Google Cloud Shell
-```bash:Cloud Shell
-gcloud auth login --no-launch-browser
+---
+
+## Deploying with Terraform
+
+The `infra/` directory provisions the full CTFd stack in one `terraform apply`.
+
+| Resource | Config |
+|---|---|
+| **Cloud Run** | v2, gen2, Direct VPC Egress, `ctfd/ctfd:latest` |
+| **Cloud SQL** | MySQL 8.0, `db-custom-8-16384` (8 vCPU / 16 GB RAM), single zone, no HA, private IP |
+| **Cloud Memorystore** | Redis 7.0, Basic tier, 1 GB, Private Service Access |
+| **GCS** | Bucket mounted via GCS FUSE at `/var/uploads` |
+| **Service Account** | Cloud SQL client + GCS Object Admin + Secret Manager accessor |
+
+### Prerequisites
+
+- Terraform >= 1.5
+- Google provider ~> 5.0
+- A GCP project with billing enabled
+- An existing VPC and subnet for Cloud Run Direct VPC Egress
+- A GCS bucket for Terraform state (`ctf-nuttee-tfstate` — configured in `infra/main.tf` backend block)
+
+### 1. Configure variables
+
+```bash
+cd infra
+cp terraform.tfvars.example terraform.tfvars
 ```
 
-#### Clone the repository
-```bash:Cloud Shell
-git clone https://github.com/dd-japan/ctf-infra.git
-```
-```bash:Cloud Shell
-cd ctf-infra/cloud-run/
-```
+Edit `terraform.tfvars` and fill in all `<placeholder>` values.
 
-#### Set environment variables
-```bash:Cloud Shell
-export PROJECT_ID="<project_id>"
-export REGION="<region_name>"
-export CLOUD_SQL_INSTANCE="<cloud_sql_instance_name>"
-export DB_USER="<db_user>"
-export DB_PASS="<db_pass>"
-export DB_NAME="<db_name>"
-exporot GCS_BUCKET="<cloud_storage_bucket_name>"
-```
+| Variable | Description | Default |
+|---|---|---|
+| `gcp_project_id` | GCP Project ID | — |
+| `gcp_region` | GCP Region | — |
+| `gcp_zone` | GCP Zone (single-zone resources) | — |
+| `gcs_bucket` | GCS bucket name for image uploads | — |
+| `gcs_bucket_region` | GCS bucket location | — |
+| `cr_vpc` | VPC network name for Direct VPC Egress | — |
+| `cr_subnet` | Subnetwork name for Direct VPC Egress | — |
+| `cr_sa_name` | Service account `account_id` for Cloud Run | — |
+| `cloud_sql_instance_name` | Cloud SQL instance name | `ctfd-mysql` |
+| `db_name` | MySQL database name | `ctfd` |
+| `db_user` | MySQL user | `ctfd` |
+| `db_password` | MySQL password — set via env var, **never in tfvars** | — |
+| `redis_instance_name` | Memorystore Redis instance name | `ctfd-redis` |
 
-```bash:Cloud Shell
-envsubst <ctfd-single-container.yaml.tamplate> ctfd-single-container.yaml
-```
+### 2. Set the database password
 
-#### Deploy CTFd server on Cloud Run
-```bash:Cloud Shell
-gcloud run service replace ctfd-single-container.yaml
+`db_password` is sensitive and must **not** be committed. Set it as an environment variable before every `terraform` command:
+
+```bash
+export TF_VAR_db_password="your-secure-password"
 ```
 
-### CTFd server configuration
-CTFd documentation has the [configuration page](https://docs.ctfd.io/docs/deployment/configuration/).
+> **Password requirement:** avoid special URL characters (`@`, `/`, `#`, `?`, `&`).
+> The password is embedded in the `DATABASE_URL` connection string using `urlencode()`,
+> which handles most characters safely — but keeping the password alphanumeric avoids
+> any edge-case encoding issues.
 
-### Datadog employees
-If you are in Datadog Sandbox GCproject, it has the guardrail: [Domain restricted sharing](https://cloud.google.com/resource-manager/docs/organization-policy/domain-restricted-sharing?hl=ja).
+### 3. Deploy
 
-As a workaround, add a tag that adapts to the guardrail's exclusion rules: `external-access:allowed` in the case of Allowing unauthenticated Cloud Run invocations.
+```bash
+terraform init   # authenticates to the GCS backend and downloads providers
+terraform plan
+terraform apply
+```
+
+### Gotchas
+
+#### Private Service Access (PSA)
+Terraform creates a `/20` PSA peering range on the VPC shared by Cloud SQL (private IP) and Memorystore Redis. If your VPC already has PSA configured, import the existing resources instead of creating new ones — see comments at the top of `infra/modules/ctfd/networking.tf`.
+
+#### Datadog Sandbox — domain-restricted sharing
+The org policy [Domain restricted sharing](https://cloud.google.com/resource-manager/docs/organization-policy/domain-restricted-sharing) blocks unauthenticated Cloud Run invocations by default. After `terraform apply`, run:
+
+```bash
+gcloud run services update ctfd-multi-containers \
+  --region=asia-southeast1 \
+  --update-labels=external-access:allowed
+```
+
+#### VPC name
+Double-check that `cr_vpc` in `terraform.tfvars` matches the exact network name shown by:
+
+```bash
+gcloud compute networks list --project=<your-project-id>
+```
+
+---
+
+## CTFd configuration reference
+
+See the [CTFd configuration docs](https://docs.ctfd.io/docs/deployment/configuration/) for all supported environment variables.

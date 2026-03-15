@@ -1,0 +1,9 @@
+.tfstate/
+.terraform/
+
+# Never commit sensitive variable overrides
+terraform.tfvars
+secrets.auto.tfvars
+*.sensitive.tfvars
+
+# .terraform.lock.hcl should be committed — it pins provider versions for reproducible builds

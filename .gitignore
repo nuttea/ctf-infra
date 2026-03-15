@@ -1,0 +1,86 @@
+# Cursor
+.cursor/
+
+# GitHub Actions
+.github/workflows/*.yaml.bak
+.github/workflows/*.yaml.tmp
+.github/workflows/*.yaml.old
+
+# IDE
+.idea/
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Terraform
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/*.tfstate.lock.info
+terraform/terraform.tfstate.*.backup
+terraform/.terraform/
+terraform/.terraform.lock.hcl
+terraform/crash.log
+terraform/crash.*.log
+terraform/*.tfvars
+terraform/override.tf
+terraform/override.tf.json
+terraform/*_override.tf
+terraform/*_override.tf.json
+terraform/.terraformrc
+terraform/terraform.rc
+terraform/*.pem
+terraform/*.crt
+terraform/*.key
+terraform/*.bak
+terraform/*gitignore*.tf
+terraform/.vagrant/
+
+# Terraform directories - exclude sensitive files
+terraform/base/*.tfstate
+terraform/base/*.tfstate.backup
+terraform/base/*.tfvars
+terraform/base/.terraform/
+terraform/base/.terraform.lock.hcl
+terraform/base/crash.log
+terraform/base/crash.*.log
+
+terraform/ctfd/*.tfstate
+terraform/ctfd/*.tfstate.backup
+terraform/ctfd/*.tfvars
+terraform/ctfd/.terraform/
+terraform/ctfd/.terraform.lock.hcl
+terraform/ctfd/crash.log
+terraform/ctfd/crash.*.log
+
+terraform/swagstore/*.tfstate
+terraform/swagstore/*.tfstate.backup
+terraform/swagstore/*.tfvars
+terraform/swagstore/.terraform/
+terraform/swagstore/.terraform.lock.hcl
+terraform/swagstore/crash.log
+terraform/swagstore/crash.*.log
+
+# Sensitive credential files
+*.tfvars
+*.env
+*.key
+*.pem
+*.crt
+*.p12
+*.pfx
+secrets/
+credentials/
+.env
+.env.local
+.env.production
+.env.staging
+
+# API Keys and Tokens
+*api_key*
+*token*
+*secret*
+*password*
+*credential*

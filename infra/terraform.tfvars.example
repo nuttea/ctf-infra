@@ -1,0 +1,23 @@
+gcp_project_id    = "<your-gcp-project-id>"
+gcp_region        = "asia-southeast1"
+gcp_zone          = "asia-southeast1-b"
+
+gcs_bucket        = "<your-gcs-bucket-name>"
+gcs_bucket_region = "asia-southeast1"
+
+cr_vpc    = "ctf-th-master-network"
+cr_subnet = "<your-subnetwork-name>"
+
+cr_sa_name = "<service-account-id>"  # e.g. ctfd-cloud-run-sa (no @project.iam.gserviceaccount.com)
+
+cloud_sql_instance_name = "<cloud-sql-instance-name>"
+db_name                 = "ctfd"
+db_user                 = "ctfd"
+
+redis_instance_name = "<redis-instance-name>"
+
+# db_password is sensitive — do NOT add it here or commit to source control.
+# Set it via one of:
+#   export TF_VAR_db_password="your-password"
+#   terraform apply -var="db_password=your-password"
+#   echo 'db_password = "your-password"' > secrets.auto.tfvars  (gitignored)
